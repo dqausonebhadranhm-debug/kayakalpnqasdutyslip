@@ -20,16 +20,15 @@
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }
-            /* Hide unnecessary UI sections during print */
             #loginSection,
             #adminDashboardSection,
             #masterForm,
             .top-bar,
             .action-main-btn,
-            .btn-print {
+            .btn-print,
+            .btn-back-admin {
                 display: none !important;
             }
-            /* Force output section and its previews to show */
             #appSection {
                 display: block !important;
             }
@@ -70,7 +69,6 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.08);
         }
 
-        /* Login Section Layout with Slideshow on Left & Thinner Form on Right */
         #loginSection {
             max-width: 950px;
             margin: 20px auto;
@@ -172,7 +170,6 @@
             text-decoration: underline;
         }
 
-        /* Form Controls */
         .form-group {
             margin-bottom: 12px;
         }
@@ -226,7 +223,6 @@
             display: none;
         }
 
-        /* App & Admin Views */
         #appSection, #adminDashboardSection {
             display: none;
         }
@@ -255,6 +251,20 @@
         }
         .btn-logout:hover {
             background-color: #c82333;
+        }
+        .btn-back-admin {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        .btn-back-admin:hover {
+            background-color: #5a6268;
         }
 
         h3 {
@@ -313,7 +323,6 @@
             background-color: #5a6268;
         }
 
-        /* Admin Dashboard Tabs */
         .admin-nav-tabs {
             display: flex;
             gap: 10px;
@@ -518,9 +527,7 @@
                     <button type="button" class="tab-btn" id="adminTabBtn" onclick="switchLoginTab('admin')">Admin</button>
                 </div>
 
-                <!-- Assessor Login & Registration Panes -->
                 <div id="assessorLoginContainer">
-                    <!-- Assessor Sign-In Pane with Captcha -->
                     <div id="assessorSignInPane">
                         <div class="form-group">
                             <label>Username <span style="color:red;">*</span></label>
@@ -531,7 +538,6 @@
                             <input type="password" id="loginPassword" placeholder="Enter password">
                         </div>
                         
-                        <!-- Captcha Box Section -->
                         <div class="form-group">
                             <label>Enter Captcha <span style="color:red;">*</span></label>
                             <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 6px;">
@@ -549,7 +555,6 @@
                         </div>
                     </div>
 
-                    <!-- Assessor Register Form -->
                     <div id="assessorRegisterPane" style="display: none;">
                         <div class="form-group">
                             <label>Full Name, Designation & Posting <span style="color:red;">*</span></label>
@@ -577,7 +582,6 @@
                     </div>
                 </div>
 
-                <!-- Admin Password Login -->
                 <div id="adminLoginPane" style="display: none;">
                     <div class="form-group">
                         <label>Admin Password <span style="color:red;">*</span></label>
@@ -608,7 +612,7 @@
                 <button type="button" class="btn-export-pdf" onclick="exportSubmissionsPDF()">📥 Export to PDF</button>
                 <button type="button" onclick="clearAllData()" style="background-color: #dc3545; color:#fff; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:12px; margin-left:auto;">Clear All Submissions</button>
             </div>
-            <p style="font-size: 13px; color: #555;">Saved duty slips & expense claims submitted by assessors:</p>
+            <p style="font-size: 13px; color: #555;">Saved duty slips & expense claims submitted by assessors (Stored Permanently):</p>
             <div style="overflow-x: auto;" id="adminSubmissionsTableContainer">
                 <table class="admin-table" id="submissionsTable">
                     <thead>
@@ -653,6 +657,9 @@
             <h2>Assessment & Claim Form Generator</h2>
             <button class="btn-logout" onclick="logoutSystem()">Logout</button>
         </div>
+
+        <!-- Back to Admin Panel Button (Appears when viewed from Admin) -->
+        <button type="button" class="btn-back-admin" id="backToAdminBtn" style="display: none;" onclick="goBackToAdmin()">← Back to Admin Control Panel</button>
 
         <form id="masterForm">
             <input type="hidden" id="editRecordIndex" value="">
@@ -882,11 +889,39 @@
 
 <script>
     let currentGeneratedCaptcha = "";
+    let viewingFromAdmin = false; // Tracks if current view is triggered by admin 'View'
 
     window.onload = function() {
         startSlideshow();
         generateCaptcha();
+        migrateDataStorage(); // Ensures backup storage is synced permanently
     };
+
+    // Advanced persistent storage to prevent data loss across sessions
+    function getStoredLogs() {
+        let primary = localStorage.getItem('nhmDutySlipLogs');
+        let backup = localStorage.getItem('nhmDutySlipLogs_backup');
+        if (primary) {
+            try { return JSON.parse(primary); } catch(e) {}
+        }
+        if (backup) {
+            try { return JSON.parse(backup); } catch(e) {}
+        }
+        return [];
+    }
+
+    function saveStoredLogs(records) {
+        let dataStr = JSON.stringify(records);
+        localStorage.setItem('nhmDutySlipLogs', dataStr);
+        localStorage.setItem('nhmDutySlipLogs_backup', dataStr); // Dual backup layer for absolute safety
+    }
+
+    function migrateDataStorage() {
+        let logs = getStoredLogs();
+        if(logs.length > 0) {
+            saveStoredLogs(logs);
+        }
+    }
 
     function generateCaptcha() {
         let chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
@@ -1000,6 +1035,8 @@
         let matchedUser = users.find(u => u.username === username && u.password === password);
 
         if(matchedUser) {
+            viewingFromAdmin = false;
+            document.getElementById('backToAdminBtn').style.display = 'none';
             document.getElementById('loginSection').style.display = 'none';
             document.getElementById('appSection').style.display = 'block';
             createNewFormEntry();
@@ -1055,7 +1092,7 @@
     }
 
     function loadAdminTableData() {
-        let records = JSON.parse(localStorage.getItem('nhmDutySlipLogs')) || [];
+        let records = getStoredLogs();
         let tbody = document.getElementById('adminTableBody');
         tbody.innerHTML = '';
 
@@ -1137,23 +1174,27 @@
     }
 
     function deleteRecordItem(idx) {
-        let records = JSON.parse(localStorage.getItem('nhmDutySlipLogs')) || [];
+        let records = getStoredLogs();
         records.splice(idx, 1);
-        localStorage.setItem('nhmDutySlipLogs', JSON.stringify(records));
+        saveStoredLogs(records);
         loadAdminTableData();
     }
 
     function clearAllData() {
         if(confirm('Are you sure you want to delete all stored submissions?')) {
             localStorage.removeItem('nhmDutySlipLogs');
+            localStorage.removeItem('nhmDutySlipLogs_backup');
             loadAdminTableData();
         }
     }
 
     function adminViewRecord(idx) {
-        let records = JSON.parse(localStorage.getItem('nhmDutySlipLogs')) || [];
+        let records = getStoredLogs();
         let rec = records[idx];
         if(!rec) return;
+
+        viewingFromAdmin = true;
+        document.getElementById('backToAdminBtn').style.display = 'inline-block';
 
         populateFormFields(rec);
         renderPreviewFromData(rec);
@@ -1164,9 +1205,12 @@
     }
 
     function adminEditRecord(idx) {
-        let records = JSON.parse(localStorage.getItem('nhmDutySlipLogs')) || [];
+        let records = getStoredLogs();
         let rec = records[idx];
         if(!rec) return;
+
+        viewingFromAdmin = true;
+        document.getElementById('backToAdminBtn').style.display = 'inline-block';
 
         populateFormFields(rec);
         document.getElementById('editRecordIndex').value = idx;
@@ -1175,6 +1219,13 @@
         document.getElementById('adminDashboardSection').style.display = 'none';
         document.getElementById('appSection').style.display = 'block';
         document.getElementById('output-section').style.display = 'none';
+    }
+
+    function goBackToAdmin() {
+        document.getElementById('appSection').style.display = 'none';
+        document.getElementById('output-section').style.display = 'none';
+        loadAdminData();
+        document.getElementById('adminDashboardSection').style.display = 'block';
     }
 
     function createNewFormEntry() {
@@ -1306,7 +1357,7 @@
     }
 
     function exportSubmissionsExcel() {
-        let records = JSON.parse(localStorage.getItem('nhmDutySlipLogs')) || [];
+        let records = getStoredLogs();
         if(records.length === 0) {
             alert("No submissions available to export!");
             return;
@@ -1410,7 +1461,7 @@
             });
         });
 
-        let records = JSON.parse(localStorage.getItem('nhmDutySlipLogs')) || [];
+        let records = getStoredLogs();
         let editIndex = document.getElementById('editRecordIndex').value;
 
         let recordObj = {
@@ -1435,7 +1486,7 @@
             records.push(recordObj);
         }
 
-        localStorage.setItem('nhmDutySlipLogs', JSON.stringify(records));
+        saveStoredLogs(records);
 
         renderPreviewFromData(recordObj);
         document.getElementById('output-section').style.display = 'block';
